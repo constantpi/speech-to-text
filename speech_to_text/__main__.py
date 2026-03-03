@@ -50,7 +50,7 @@ def get_user_settings():
     user_settings = {}
 
     try:
-        data = read_json("settings", "user_settings")
+        data = read_json("settings", "my_settings")
         for data_type in data_types:
             user_settings[data_type] = data[data_type]
     except Exception as e:
@@ -191,7 +191,7 @@ def extracting_each_setting(user_settings):
 
     write_json(
         "settings",
-        "user_settings",
+        "my_settings",
         {
             "app_settings": filtered_app_settings,
             "model_settings": filtered_model_settings,
