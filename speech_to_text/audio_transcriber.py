@@ -193,7 +193,7 @@ class AudioTranscriber:
             if self.app_options.create_audio_file and len(self.all_audio_data_list) > 0:
                 audio_data = np.concatenate(self.all_audio_data_list)
                 self.all_audio_data_list.clear()
-                write_audio("web", "voice", audio_data)
+                # write_audio("web", "voice", audio_data)
                 self.batch_transcribe_audio(audio_data)
 
             if self.stream is not None:
