@@ -2,6 +2,7 @@ import asyncio
 import eel
 import sys
 import threading
+from typing import Optional
 
 from faster_whisper import WhisperModel
 from .audio_transcriber import AppOptions
@@ -13,11 +14,11 @@ from .openai_api import OpenAIAPI
 
 eel.init("web")
 
-transcriber: AudioTranscriber = None
-event_loop: asyncio.AbstractEventLoop = None
-thread: threading.Thread = None
-websocket_server: WebSocketServer = None
-openai_api: OpenAIAPI = None
+transcriber: Optional[AudioTranscriber] = None
+event_loop: Optional[asyncio.AbstractEventLoop] = None
+thread: Optional[threading.Thread] = None
+websocket_server: Optional[WebSocketServer] = None
+openai_api: Optional[OpenAIAPI] = None
 
 
 @eel.expose
@@ -105,6 +106,8 @@ def stop_transcription():
     if transcriber is None:
         eel.transcription_stoppd()
         return
+    if event_loop is None:
+        return
     transcriber_future = asyncio.run_coroutine_threadsafe(
         transcriber.stop_transcription(), event_loop
     )
@@ -116,7 +119,7 @@ def stop_transcription():
         )
         websocket_server_future.result()
 
-    if thread.is_alive():
+    if thread is not None and thread.is_alive():
         event_loop.call_soon_threadsafe(event_loop.stop)
         thread.join()
     event_loop.close()
@@ -144,6 +147,9 @@ def audio_transcription(user_settings, base64data):
 
         if app_settings.use_openai_api:
             openai_api = OpenAIAPI()
+
+        if event_loop is None:
+            raise Exception("Event loop is not running. Please start transcription first.")
 
         transcriber = AudioTranscriber(
             event_loop,

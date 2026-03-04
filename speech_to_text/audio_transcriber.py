@@ -4,7 +4,7 @@ import eel
 import queue
 import numpy as np
 
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 from faster_whisper import WhisperModel
 from concurrent.futures import ThreadPoolExecutor
 
@@ -36,8 +36,8 @@ class AudioTranscriber:
         whisper_model: WhisperModel,
         transcribe_settings: dict,
         app_options: AppOptions,
-        websocket_server: WebSocketServer,
-        openai_api: OpenAIAPI,
+        websocket_server: Optional[WebSocketServer],
+        openai_api: Optional[OpenAIAPI],
     ):
         self.event_loop = event_loop
         self.whisper_model: WhisperModel = whisper_model
@@ -192,6 +192,8 @@ class AudioTranscriber:
         for segment in segments:
             word_list = []
             if self.transcribe_settings["word_timestamps"] == True:
+                if segment.words is None:
+                    continue
                 for word in segment.words:
                     word_list.append(
                         {
