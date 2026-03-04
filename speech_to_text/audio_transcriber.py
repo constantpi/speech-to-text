@@ -19,6 +19,8 @@ class AppOptions(NamedTuple):
     audio_device: int
     silence_limit: int = 8
     noise_threshold: int = 5
+    recent_audio_duration: int = 32  # 直近の音声データの長さ（サンプル数）大体1秒分
+    recent_audio_max_length: int = 5  # 直近の音声データの最大長さ（サンプル数）大体5秒分
     non_speech_threshold: float = 0.1
     include_non_speech: bool = False
     create_audio_file: bool = True
@@ -51,6 +53,10 @@ class AudioTranscriber:
         self.stream = None
         self._running = asyncio.Event()
         self._transcribe_task = None
+        # 直近の数秒間の音声データ
+        self.recent_audio_data = None
+        self.recent_audio_start: int = 0
+        self.recent_audio_length: int = 0
 
     async def transcribe_audio(self):
         # Ignore parameters that affect performance
@@ -97,13 +103,26 @@ class AudioTranscriber:
             if self.app_options.include_non_speech:
                 self.audio_data_list.append(audio_data.flatten())
 
+        # 直近の数秒間の音声データを更新
+        # もしstartから現在までの長さが前回の長さ + recent_audio_durationを超えていたら、recent_audio_dataを更新
+        if len(self.audio_data_list) - self.recent_audio_start >= self.app_options.recent_audio_duration * (self.recent_audio_length + 1):
+            self.recent_audio_length = min(self.recent_audio_length + 1, self.app_options.recent_audio_max_length)
+            self.recent_audio_start = len(self.audio_data_list) - self.app_options.recent_audio_duration * self.recent_audio_length
+            # self.recent_audio_data = audio_data[self.recent_audio_start:]
+            self.recent_audio_data = np.concatenate(self.audio_data_list[self.recent_audio_start:])
+            print(f"Updated recent audio data: shape={self.recent_audio_data.shape}, length={self.recent_audio_length} seconds")
+
         if not is_speech and self.silence_counter > self.app_options.silence_limit:
             self.silence_counter = 0
+            self.recent_audio_length = 0
+            self.recent_audio_start = 0
+            self.recent_audio_data = None
 
-            if self.app_options.create_audio_file:
-                self.all_audio_data_list.extend(self.audio_data_list)
+            # if self.app_options.create_audio_file:
+            #     self.all_audio_data_list.extend(self.audio_data_list)
 
             if len(self.audio_data_list) > self.app_options.noise_threshold:
+                print(f"Detected speech segment with {len(self.audio_data_list)} audio chunks.")
                 concatenate_audio_data = np.concatenate(self.audio_data_list)
                 self.audio_data_list.clear()
                 self.audio_queue.put(concatenate_audio_data)
