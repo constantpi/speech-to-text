@@ -30,6 +30,7 @@ class OpenAIAPI:
 
         # スライディングコンテクスト保持用
         self.previous_translation_context = ""
+        self.previous_raw_text_context = ""
 
     def text_translation(self, new_text: str) -> str:
         if not contains_english(new_text):
@@ -52,6 +53,7 @@ class OpenAIAPI:
                 ),
                 (
                     "user",
+                    "【以前の文字起こし】\n{prev_raw_text}\n\n"
                     "【以前の翻訳】\n{prev_translation}\n\n"
                     "【新しい文字起こし部分】\n{new_text}"
                 ),
@@ -59,9 +61,12 @@ class OpenAIAPI:
         )
 
         formatted_prompt = chat_prompt.format_messages(
+            prev_raw_text=self.previous_raw_text_context,
             prev_translation=self.previous_translation_context,
             new_text=new_text
         )
+        # print("=== Prompt to OpenAI ===")
+        # print(formatted_prompt)
 
         response = self.chat_model.invoke(formatted_prompt)
         translated = response.content.strip()
@@ -69,5 +74,9 @@ class OpenAIAPI:
         # コンテクスト更新（直近300文字だけ保持）
         combined = self.previous_translation_context + "\n" + translated
         self.previous_translation_context = combined[-CONTEXT_MAX_LENGTH:]
+
+        # 新しい文字起こしコンテクストを更新
+        self.previous_raw_text_context += new_text
+        self.previous_raw_text_context = self.previous_raw_text_context[-CONTEXT_MAX_LENGTH:]
 
         return translated
