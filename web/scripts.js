@@ -6,7 +6,21 @@ function on_recive_message(message) {
 
 eel.expose(display_transcription);
 function display_transcription(transcript) {
+  // 確定文字起こしが来たら暫定表示を破棄する
+  clearMessage("recent-transcription");
   addMessage("transcription", transcript);
+}
+
+eel.expose(display_recent_transcription);
+function display_recent_transcription(transcript) {
+  // 直近の暫定文字起こしは常に上書き表示する
+  clearMessage("recent-transcription");
+  const el = document.querySelector(`#recent-transcription`);
+  const newel = document.createElement("div");
+  newel.classList.add("segment-container");
+  newel.textContent = transcript;
+  el.appendChild(newel);
+  el.scrollTop = el.scrollHeight;
 }
 
 eel.expose(transcription_clear);

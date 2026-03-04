@@ -125,10 +125,10 @@ class AudioTranscriber:
                     self.recent_audio_data = None  # Transcribed recent audio data, reset to None
 
                     for segment in segments:
+                        eel.display_recent_transcription(segment.text)
                         # eel.display_transcription(segment.text)
-                        # if self.websocket_server is not None:
-                        #     await self.websocket_server.send_message(segment.text)
-                        print(f"Transcribed recent audio segment: {segment.text}")
+                        if self.websocket_server is not None:
+                            await self.websocket_server.send_message(segment.text)
 
                 except Exception as e:
                     eel.on_recive_message(str(e))
