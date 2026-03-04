@@ -53,6 +53,7 @@ class AudioTranscriber:
         self.stream = None
         self._running = asyncio.Event()
         self._transcribe_task = None
+        self._recent_transcribe_task = None
         # 直近の数秒間の音声データ
         self.recent_audio_data = None
         self.recent_audio_start: int = 0
@@ -93,6 +94,45 @@ class AudioTranscriber:
                 except Exception as e:
                     eel.on_recive_message(str(e))
 
+    async def transcribe_recent_audio(self):
+        """
+        最近保持している音声バッファ（`self.recent_audio_data`）が存在する場合に
+        Whisper で文字起こしを行い、結果をクライアントに送信します。
+
+        このメソッドは非同期で呼び出すことを想定しており、内部でスレッドプール
+        を使ってモデルの `transcribe` をブロッキング実行します。
+        """
+
+        # 簡易的に transcribe_audio と同じ設定を使用（リアルタイムは without_timestamps 推奨）
+        transcribe_settings = self.transcribe_settings.copy()
+        transcribe_settings["without_timestamps"] = True
+        transcribe_settings["word_timestamps"] = False
+
+        with ThreadPoolExecutor() as executor:
+            while self.transcribing:
+                if self.recent_audio_data is None:
+                    await asyncio.sleep(0.2)
+                    continue
+
+                try:
+                    func = functools.partial(
+                        self.whisper_model.transcribe,
+                        audio=self.recent_audio_data,
+                        **transcribe_settings,
+                    )
+
+                    segments, _ = await self.event_loop.run_in_executor(executor, func)
+                    self.recent_audio_data = None  # Transcribed recent audio data, reset to None
+
+                    for segment in segments:
+                        # eel.display_transcription(segment.text)
+                        # if self.websocket_server is not None:
+                        #     await self.websocket_server.send_message(segment.text)
+                        print(f"Transcribed recent audio segment: {segment.text}")
+
+                except Exception as e:
+                    eel.on_recive_message(str(e))
+
     def process_audio(self, audio_data: np.ndarray, frames: int, time, status):
         is_speech = self.vad.is_speech(audio_data)
         if is_speech:
@@ -108,7 +148,6 @@ class AudioTranscriber:
         if len(self.audio_data_list) - self.recent_audio_start >= self.app_options.recent_audio_duration * (self.recent_audio_length + 1):
             self.recent_audio_length = min(self.recent_audio_length + 1, self.app_options.recent_audio_max_length)
             self.recent_audio_start = len(self.audio_data_list) - self.app_options.recent_audio_duration * self.recent_audio_length
-            # self.recent_audio_data = audio_data[self.recent_audio_start:]
             self.recent_audio_data = np.concatenate(self.audio_data_list[self.recent_audio_start:])
             print(f"Updated recent audio data: shape={self.recent_audio_data.shape}, length={self.recent_audio_length} seconds")
 
@@ -196,6 +235,10 @@ class AudioTranscriber:
             self._transcribe_task = asyncio.run_coroutine_threadsafe(
                 self.transcribe_audio(), self.event_loop
             )
+            # start recent-audio transcribe task (runs similarly to transcribe_audio)
+            self._recent_transcribe_task = asyncio.run_coroutine_threadsafe(
+                self.transcribe_recent_audio(), self.event_loop
+            )
             eel.on_recive_message("Transcription started.")
             while self._running.is_set():
                 await asyncio.sleep(1)
@@ -208,6 +251,9 @@ class AudioTranscriber:
             if self._transcribe_task is not None:
                 self.event_loop.call_soon_threadsafe(self._transcribe_task.cancel)
                 self._transcribe_task = None
+            if self._recent_transcribe_task is not None:
+                self.event_loop.call_soon_threadsafe(self._recent_transcribe_task.cancel)
+                self._recent_transcribe_task = None
 
             if self.app_options.create_audio_file and len(self.all_audio_data_list) > 0:
                 audio_data = np.concatenate(self.all_audio_data_list)
