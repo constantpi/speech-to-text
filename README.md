@@ -77,6 +77,16 @@ For example(in .env file):
 OPENAI_API_KEY=your_openai_api_key_here
 ```
 
+## API Cost (Approximate)
+
+When using GPT-4o-mini with optimized differential translation, real-time lecture translation typically costs on the order ofa few cents per hour.
+
+Actual cost depends on:
+- Model choice
+- Buffer size
+- Speaking speed
+- Translation frequency
+
 ## Notes
 
 - If you select local_model in "Model size or path", the model with the same name in the local folder will be referenced.
