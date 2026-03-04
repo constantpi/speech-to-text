@@ -83,10 +83,10 @@ class AudioTranscriber:
                     # Run the transcribe method in a thread
                     segments, _ = await self.event_loop.run_in_executor(executor, func)
 
-                    for segment in segments:
-                        eel.display_transcription(segment.text)
-                        if self.websocket_server is not None:
-                            await self.websocket_server.send_message(segment.text)
+                    text = "\n".join([segment.text for segment in segments])
+                    eel.display_transcription(text)
+                    if self.websocket_server is not None:
+                        await self.websocket_server.send_message(text)
 
                 except queue.Empty:
                     # Skip to the next iteration if a timeout occurs
@@ -124,11 +124,10 @@ class AudioTranscriber:
                     segments, _ = await self.event_loop.run_in_executor(executor, func)
                     self.recent_audio_data = None  # Transcribed recent audio data, reset to None
 
-                    for segment in segments:
-                        eel.display_recent_transcription(segment.text)
-                        # eel.display_transcription(segment.text)
-                        if self.websocket_server is not None:
-                            await self.websocket_server.send_message(segment.text)
+                    text = "\n".join([segment.text for segment in segments])
+                    eel.display_recent_transcription(text)
+                    if self.websocket_server is not None:
+                        await self.websocket_server.send_message(text)
 
                 except Exception as e:
                     eel.on_recive_message(str(e))
