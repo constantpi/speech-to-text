@@ -1,6 +1,14 @@
-# speech-to-text
+# speech-to-text + Real-time Translation
 
-Real-time transcription using [faster-whisper](https://github.com/guillaumekln/faster-whisper)
+This project is a fork of the original speech-to-text repository by reriiasu:
+
+https://github.com/reriiasu/speech-to-text
+
+The original project provides real-time transcription using [faster-whisper](https://github.com/guillaumekln/faster-whisper).
+This fork extends it with real-time translation and latency optimization,
+designed for live lecture support (e.g., English Zoom lectures → Japanese).
+
+
 
 ![architecture](docs/architecture.png)
 
@@ -8,36 +16,66 @@ Accepts audio input from a microphone using a [Sounddevice](https://github.com/s
 
 The HTML-based GUI allows you to check the transcription results and make detailed settings for the faster-whisper.
 
+## New Features in This Fork
+
+- Real-time translation (e.g., English → Japanese)
+- Differential translation updates (reduce redundant re-translation)
+- Optimized OpenAI API token usage
+- Lower latency buffering strategy
+- uv-based reproducible environment
+
 ## Transcription speed
 
 If the sentences are well separated, the transcription takes less than a second.
 ![TranscriptionSpeed](docs/transcription_speed.png)
 
-Large-v2 model  
+Large-v2 model
 Executed with CUDA 11.7 on a NVIDIA GeForce RTX 3060 12GB.
 
 ## Installation
 
-1. pip install .
+This project uses **uv** for environment and dependency management.
 
-### for Windows
+### 1. Install uv
 
-Please execute "run.bat." It will perform the following actions:
+If you don't have uv installed:
 
-1. Create a Python virtual environment.
-1. Install pip packages.
-1. Run speech_to_text.
+https://docs.astral.sh/uv/
 
-## Usage
+### 2. Create and sync environment
 
-1. python -m speech_to_text
+From the project root:
+
+```
+uv sync
+```
+
+
+This will:
+- Create a virtual environment
+- Install all required dependencies
+
+Dependency versions are locked via `uv.lock` for reproducibility.
+
+---
+
+## Run
+```
+uv run python -m speech_to_text
+```
+
 1. Select "App Settings" and configure the settings.
-1. Select "Model Settings" and configure the settings.
-1. Select "Transcribe Settings" and configure the settings.
-1. Select "VAD Settings" and configure the settings.
-1. Start Transcription
+2. Select "Model Settings" and configure the settings.
+3. Select "Transcribe Settings" and configure the settings.
+4. Select "VAD Settings" and configure the settings.
+5. Start Transcription
 
-If you use the OpenAI API for text proofreading, set OPENAI_API_KEY as an environment variable.
+If you want to use real-time translation with the OPENAI API, please set the OPENAI_API_KEY in the .env file.
+The `.env` file will be loaded automatically at startup.
+For example(in .env file):
+```
+OPENAI_API_KEY=your_openai_api_key_here
+```
 
 ## Notes
 
@@ -47,8 +85,9 @@ If you use the OpenAI API for text proofreading, set OPENAI_API_KEY as an enviro
 
 ![demo](docs/demo.gif)
 
-## News
+## Original Project Updates
 
+The following updates were made in the original repository by reriiasu.
 ### 2023-06-26
 
 - Add generate audio files from input sound.
@@ -106,12 +145,22 @@ if Word Timestamps is true.
 - Updating packages.
 - Add run.bat for Windows.
 
-## Todo
+## Fork Updates
 
-- [x] Save and load previous settings.
+### 2026-03-04
+- Added real-time translation feature
+- Implemented differential translation updates
+- Optimized OpenAI API token usage
+- Migrated environment management to uv
 
-- [x] Use Silero VAD
+## License
 
-- [x] Allow local parameters to be set from the GUI.
+This project is licensed under the MIT License.
 
-- [x] Supports additional options in faster-whisper 0.8.0
+Original work:
+Copyright (c) 2023 reriiasu
+
+Modifications:
+Copyright (c) 2026 constantpi
+
+See LICENSE for details.
