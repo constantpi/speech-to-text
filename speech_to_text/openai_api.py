@@ -8,6 +8,14 @@ MAX_TOKENS = 2000
 # スライディングコンテクスト保持用の最大文字数（例: 直近300文字を保持）
 CONTEXT_MAX_LENGTH = 300
 
+ALPHABET_THRESHOLD = 5  # アルファベットが5文字以上含まれているかどうかの閾値
+
+
+# 文字列がアルファベットを一定以上含むかどうかを判定する関数
+def contains_english(text):
+    count = sum(1 for char in text if char.isalpha())
+    return count >= ALPHABET_THRESHOLD
+
 
 class OpenAIAPI:
     def __init__(self):
@@ -23,7 +31,14 @@ class OpenAIAPI:
         # スライディングコンテクスト保持用
         self.previous_translation_context = ""
 
-    def text_translation(self, new_text: str):
+    def text_translation(self, new_text: str) -> str:
+        if not contains_english(new_text):
+            # アルファベットが一定以上含まれていない場合は翻訳しない
+            # 新しい文字起こしコンテクストを更新
+            # print("=== Skipping translation (not enough English) ===")
+            self.previous_raw_text_context += new_text
+            self.previous_raw_text_context = self.previous_raw_text_context[-CONTEXT_MAX_LENGTH:]
+            return ""
         chat_prompt = ChatPromptTemplate.from_messages(
             [
                 (
