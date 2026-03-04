@@ -163,7 +163,7 @@ class AudioTranscriber:
             self.recent_audio_length = min(self.recent_audio_length + 1, self.app_options.recent_audio_max_length)
             self.recent_audio_start = len(self.audio_data_list) - self.app_options.recent_audio_duration * self.recent_audio_length
             self.recent_audio_data = np.concatenate(self.audio_data_list[self.recent_audio_start:])
-            print(f"Updated recent audio data: shape={self.recent_audio_data.shape}, length={self.recent_audio_length} seconds")
+            # print(f"Updated recent audio data: shape={self.recent_audio_data.shape}, length={self.recent_audio_length} seconds")
 
         if not is_speech and self.silence_counter > self.app_options.silence_limit:
             self.silence_counter = 0
@@ -175,7 +175,7 @@ class AudioTranscriber:
             #     self.all_audio_data_list.extend(self.audio_data_list)
 
             if len(self.audio_data_list) > self.app_options.noise_threshold:
-                print(f"Detected speech segment with {len(self.audio_data_list)} audio chunks.")
+                # print(f"Detected speech segment with {len(self.audio_data_list)} audio chunks.")
                 concatenate_audio_data = np.concatenate(self.audio_data_list)
                 self.audio_data_list.clear()
                 self.audio_queue.put(concatenate_audio_data)
