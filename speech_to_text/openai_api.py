@@ -24,7 +24,8 @@ class OpenAIAPI:
         self.MAX_TOKENS = MAX_TOKENS
         self.chat_model = ChatOpenAI(
             model=self.MODEL_NAME,
-            max_tokens=self.MAX_TOKENS,
+            # max_tokens=self.MAX_TOKENS,
+            max_completion_tokens=self.MAX_TOKENS,
             temperature=0
         )
 
@@ -40,6 +41,7 @@ class OpenAIAPI:
             self.previous_raw_text_context += new_text
             self.previous_raw_text_context = self.previous_raw_text_context[-CONTEXT_MAX_LENGTH:]
             return ""
+        new_text = new_text[:CONTEXT_MAX_LENGTH * 10]  # 新しい文字起こし部分も最大長に制限
         chat_prompt = ChatPromptTemplate.from_messages(
             [
                 (
@@ -69,7 +71,7 @@ class OpenAIAPI:
         # print(formatted_prompt)
 
         response = self.chat_model.invoke(formatted_prompt)
-        translated = response.content.strip()
+        translated = str(response.content).strip()
 
         # コンテクスト更新（直近300文字だけ保持）
         combined = self.previous_translation_context + "\n" + translated
