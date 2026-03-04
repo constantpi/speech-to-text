@@ -21,6 +21,7 @@ class AppOptions(NamedTuple):
     noise_threshold: int = 5
     recent_audio_duration: int = 32  # 直近の音声データの長さ（サンプル数）大体1秒分
     recent_audio_max_length: int = 5  # 直近の音声データの最大長さ（サンプル数）大体5秒分
+    save_result_number: int = 3  # 直近の文字起こしの結果をいくつ保持しておくか
     non_speech_threshold: float = 0.1
     include_non_speech: bool = False
     create_audio_file: bool = True
@@ -55,9 +56,10 @@ class AudioTranscriber:
         self._transcribe_task = None
         self._recent_transcribe_task = None
         # 直近の数秒間の音声データ
-        self.recent_audio_data = None
+        self.recent_audio_data: Optional[np.ndarray] = None
         self.recent_audio_start: int = 0
         self.recent_audio_length: int = 0
+        self.transcribe_result_list: list = []  # 文字起こし結果のリスト(3つ程度保持しておく)
 
     async def transcribe_audio(self):
         # Ignore parameters that affect performance
@@ -87,6 +89,12 @@ class AudioTranscriber:
                     eel.display_transcription(text)
                     if self.websocket_server is not None:
                         await self.websocket_server.send_message(text)
+
+                    # textをself.transcribe_result_listに追加し、最大でapp_options.save_result_number個まで保持する
+                    self.transcribe_result_list.append(text)
+                    eel.display_recent_transcription("\n".join(self.transcribe_result_list))  # 直近の文字起こし結果を結合して表示 一つ多い状態でOK
+                    if len(self.transcribe_result_list) > self.app_options.save_result_number:
+                        self.transcribe_result_list = self.transcribe_result_list[-self.app_options.save_result_number:]
 
                 except queue.Empty:
                     # Skip to the next iteration if a timeout occurs
@@ -124,7 +132,8 @@ class AudioTranscriber:
                     segments, _ = await self.event_loop.run_in_executor(executor, func)
                     self.recent_audio_data = None  # Transcribed recent audio data, reset to None
 
-                    text = "\n".join([segment.text for segment in segments])
+                    text = ("\n".join(self.transcribe_result_list) + "\n") if self.transcribe_result_list else ""  # 直近の文字起こし結果を結合
+                    text += "\n".join([segment.text for segment in segments])
                     eel.display_recent_transcription(text)
                     if self.websocket_server is not None:
                         await self.websocket_server.send_message(text)

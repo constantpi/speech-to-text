@@ -6,8 +6,6 @@ function on_recive_message(message) {
 
 eel.expose(display_transcription);
 function display_transcription(transcript) {
-  // 確定文字起こしが来たら暫定表示を破棄する
-  clearMessage("recent-transcription");
   addMessage("transcription", transcript);
 }
 

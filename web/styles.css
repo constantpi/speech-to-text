@@ -332,6 +332,11 @@ input[type="number"].setting-control {
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
 
+/* recent-transcription 内のテキストで改行をそのまま反映する */
+#recent-transcription .segment-container {
+  white-space: pre-wrap;
+}
+
 .control-button {
   position: absolute;
   top: 0px;
