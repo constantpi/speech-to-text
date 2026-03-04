@@ -55,11 +55,13 @@ class AudioTranscriber:
         self._running = asyncio.Event()
         self._transcribe_task = None
         self._recent_transcribe_task = None
+        self._translate_task = None
         # 直近の数秒間の音声データ
         self.recent_audio_data: Optional[np.ndarray] = None
         self.recent_audio_start: int = 0
         self.recent_audio_length: int = 0
-        self.transcribe_result_list: list = []  # 文字起こし結果のリスト(3つ程度保持しておく)
+        self.transcribe_result_list: list[str] = []  # 文字起こし結果のリスト(3つ程度保持しておく)
+        self.texts_to_translate: list[str] = []  # 翻訳待ちのテキストのリスト
 
     async def transcribe_audio(self):
         # Ignore parameters that affect performance
@@ -95,6 +97,10 @@ class AudioTranscriber:
                     eel.display_recent_transcription("\n".join(self.transcribe_result_list))  # 直近の文字起こし結果を結合して表示 一つ多い状態でOK
                     if len(self.transcribe_result_list) > self.app_options.save_result_number:
                         self.transcribe_result_list = self.transcribe_result_list[-self.app_options.save_result_number:]
+
+                    # 翻訳待ちのテキストに追加する
+                    if self.app_options.use_openai_api:
+                        self.texts_to_translate.append(text)
 
                 except queue.Empty:
                     # Skip to the next iteration if a timeout occurs
@@ -205,32 +211,11 @@ class AudioTranscriber:
 
         eel.transcription_clear()
 
-        if self.openai_api is not None:
-            self.text_proofreading(segment_list)
-        else:
-            eel.on_recive_segments(segment_list)
-
-    def text_proofreading(self, segment_list: list):
-        # Use [#] as a separator
-        combined_text = "[#]" + "[#]".join(segment["text"] for segment in segment_list)
-        result = self.openai_api.text_proofreading(combined_text)
-        split_text = result.split("[#]")
-
-        del split_text[0]
-
-        eel.display_transcription("Before text proofreading.")
+        # if self.openai_api is not None:
+        #     self.text_proofreading(segment_list)
+        # else:
+        #     eel.on_recive_segments(segment_list)
         eel.on_recive_segments(segment_list)
-
-        if len(split_text) == len(segment_list):
-            for i, segment in enumerate(segment_list):
-                segment["text"] = split_text[i]
-                segment["words"] = []
-            eel.on_recive_message("proofread success.")
-            eel.display_transcription("After text proofreading.")
-            eel.on_recive_segments(segment_list)
-        else:
-            eel.on_recive_message("proofread failure.")
-            eel.on_recive_message(result)
 
     async def start_transcription(self):
         try:
@@ -247,6 +232,10 @@ class AudioTranscriber:
             self._recent_transcribe_task = asyncio.run_coroutine_threadsafe(
                 self.transcribe_recent_audio(), self.event_loop
             )
+            # start translation task (runs similarly to transcribe_audio)
+            self._translate_task = asyncio.run_coroutine_threadsafe(
+                self.text_translation(), self.event_loop
+            )
             eel.on_recive_message("Transcription started.")
             while self._running.is_set():
                 await asyncio.sleep(1)
@@ -262,6 +251,9 @@ class AudioTranscriber:
             if self._recent_transcribe_task is not None:
                 self.event_loop.call_soon_threadsafe(self._recent_transcribe_task.cancel)
                 self._recent_transcribe_task = None
+            if self._translate_task is not None:
+                self.event_loop.call_soon_threadsafe(self._translate_task.cancel)
+                self._translate_task = None
 
             if self.app_options.create_audio_file and len(self.all_audio_data_list) > 0:
                 audio_data = np.concatenate(self.all_audio_data_list)
@@ -279,3 +271,29 @@ class AudioTranscriber:
                 eel.on_recive_message("No active stream to stop.")
         except Exception as e:
             eel.on_recive_message(str(e))
+
+    async def text_translation(self):
+        '''
+        self.transcribe_result_listのテキストを翻訳して、翻訳結果をクライアントに送信します。
+        翻訳にはOpenAIAPIのtext_translationメソッドを使用します。
+        '''
+        if self.openai_api is None:
+            return
+        with ThreadPoolExecutor() as executor:
+            while self.transcribing:
+                if not self.texts_to_translate:
+                    await asyncio.sleep(0.5)
+                    continue
+                text = "\n".join(self.texts_to_translate)
+                self.texts_to_translate.clear()
+                try:
+                    print(f"Translating text: {text}")
+                    translated_text = await self.event_loop.run_in_executor(
+                        executor, functools.partial(self.openai_api.text_translation, text)
+                    )
+                    eel.display_transcription(translated_text)
+                    print(f"Translated text: {translated_text}")
+                    if self.websocket_server is not None:
+                        await self.websocket_server.send_message(translated_text)
+                except Exception as e:
+                    eel.on_recive_message(str(e))
