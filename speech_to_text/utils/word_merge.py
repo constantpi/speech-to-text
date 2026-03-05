@@ -49,6 +49,11 @@ def word_merge(word_list: list[list[tuple[float, float, str]]], audio_start: flo
                 text = extract_alphabet(text[:-3])
             elif text.startswith("..."):
                 text = extract_alphabet(text[3:])
+            if text == "":
+                continue
+            # 最後の文字がアルファベットだったら空白を追加する
+            if text[0].isalpha():
+                text = " " + text
             flatten_list.append((start, end, text, i))
     # 区間の中央値でソートする
     flatten_list.sort(key=lambda x: (x[0] + x[1]) / 2)
