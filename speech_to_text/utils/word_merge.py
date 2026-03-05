@@ -150,7 +150,12 @@ def clean_word_list(word_list: list[list[tuple[float, float, str]]], determined_
                 continue
 
         for start, end, text in sublist:
-            if start >= determined_end - 0.01:  # determined_endの少し前から残す
+            to_add = False
+            if start >= determined_end + 0.01:  # 確実に含むべき
+                to_add = True
+            elif start >= determined_end - 0.01 and start != end:  # 微妙なものは、startとendが同じでないものに限って含める
+                to_add = True
+            if to_add:
                 new_sublist.append((start, end, text))
         if new_sublist:
             new_word_list.append(new_sublist)
