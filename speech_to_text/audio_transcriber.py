@@ -9,10 +9,14 @@ from faster_whisper import WhisperModel
 from concurrent.futures import ThreadPoolExecutor
 
 from .utils.audio_utils import create_audio_stream
+from .utils.word_merge import word_merge
 from .vad import Vad
 from .utils.file_utils import write_audio
 from .websoket_server import WebSocketServer
 from .openai_api import OpenAIAPI
+
+RATE = 16000
+CHUNK = 512
 
 
 class AppOptions(NamedTuple):
@@ -57,11 +61,12 @@ class AudioTranscriber:
         self._recent_transcribe_task = None
         self._translate_task = None
         # 直近の数秒間の音声データ
-        self.recent_audio_data: Optional[np.ndarray] = None
+        self.recent_audio_data: Optional[tuple[np.ndarray, float]] = None
         self.recent_audio_start: int = 0
         self.recent_audio_length: int = 0
         self.transcribe_result_list: list[str] = []  # 文字起こし結果のリスト(3つ程度保持しておく)
         self.texts_to_translate: list[str] = []  # 翻訳待ちのテキストのリスト
+        self.word_timestamp_list: list[list[tuple[float, float, str]]] = []  # start, end, textのタプルのリストのリスト
 
     async def transcribe_audio(self):
         # Ignore parameters that affect performance
@@ -117,10 +122,10 @@ class AudioTranscriber:
         を使ってモデルの `transcribe` をブロッキング実行します。
         """
 
-        # 簡易的に transcribe_audio と同じ設定を使用（リアルタイムは without_timestamps 推奨）
+        # タイムスタンプ付きで文字起こしをする
         transcribe_settings = self.transcribe_settings.copy()
-        transcribe_settings["without_timestamps"] = True
-        transcribe_settings["word_timestamps"] = False
+        transcribe_settings["without_timestamps"] = False
+        transcribe_settings["word_timestamps"] = True
 
         with ThreadPoolExecutor() as executor:
             while self.transcribing:
@@ -129,17 +134,33 @@ class AudioTranscriber:
                     continue
 
                 try:
+                    audio, start_time = self.recent_audio_data
                     func = functools.partial(
                         self.whisper_model.transcribe,
-                        audio=self.recent_audio_data,
+                        audio=audio,
                         **transcribe_settings,
                     )
 
-                    segments, _ = await self.event_loop.run_in_executor(executor, func)
+                    segments, _info = await self.event_loop.run_in_executor(executor, func)
+                    word_list = []
+                    for segment in segments:
+                        # print(f"Segment: start={segment.start:.2f}s, end={segment.end:.2f}s, text='{segment.text}'")
+                        if segment.words is not None:
+                            for word in segment.words:
+
+                                word_start_time = start_time + word.start
+                                word_end_time = start_time + word.end
+                                # wordからは空白や-や.などを除去しておく
+                                cleaned_word = word.word.strip().strip("-").strip(".")
+                                if cleaned_word:  # 空でない場合のみ追加
+                                    word_list.append((word_start_time, word_end_time, word.word))
                     self.recent_audio_data = None  # Transcribed recent audio data, reset to None
+                    if start_time < 0.01:
+                        self.word_timestamp_list.clear()  # 音声区間の開始が0秒付近の場合は、前の区間の単語タイムスタンプをクリア
+                    self.word_timestamp_list.append(word_list)  # word_timestamp_listに追加
 
                     text = ("\n".join(self.transcribe_result_list) + "\n") if self.transcribe_result_list else ""  # 直近の文字起こし結果を結合
-                    text += "\n".join([segment.text for segment in segments])
+                    text += word_merge(self.word_timestamp_list)  # word_timestamp_listをマージしてテキストに追加
                     eel.display_recent_transcription(text)
                     if self.websocket_server is not None:
                         await self.websocket_server.send_message(text)
@@ -162,7 +183,8 @@ class AudioTranscriber:
         if len(self.audio_data_list) - self.recent_audio_start >= self.app_options.recent_audio_duration * (self.recent_audio_length + 1):
             self.recent_audio_length = min(self.recent_audio_length + 1, self.app_options.recent_audio_max_length)
             self.recent_audio_start = len(self.audio_data_list) - self.app_options.recent_audio_duration * self.recent_audio_length
-            self.recent_audio_data = np.concatenate(self.audio_data_list[self.recent_audio_start:])
+            start_time = self.recent_audio_start * CHUNK / RATE
+            self.recent_audio_data = (np.concatenate(self.audio_data_list[self.recent_audio_start:]), start_time)
             # print(f"Updated recent audio data: shape={self.recent_audio_data.shape}, length={self.recent_audio_length} seconds")
 
         if not is_speech and self.silence_counter > self.app_options.silence_limit:
@@ -170,6 +192,7 @@ class AudioTranscriber:
             self.recent_audio_length = 0
             self.recent_audio_start = 0
             self.recent_audio_data = None
+            self.word_timestamp_list.clear()  # 音声区間が終了したら、word_timestamp_listもクリア
 
             # if self.app_options.create_audio_file:
             #     self.all_audio_data_list.extend(self.audio_data_list)
