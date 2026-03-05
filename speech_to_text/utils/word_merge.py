@@ -1,6 +1,16 @@
 THRESHOLD = 0.2  # クラスタリングの閾値（秒）
 
 
+def extract_alphabet(word: str) -> str:
+    '''単語からアルファベットのみを抽出する'''
+    return "".join([c for c in word if c.isalpha()])
+
+
+def is_same_word(word1: str, word2: str) -> bool:
+    '''2つの単語が同じかどうかを判定する'''
+    return extract_alphabet(word1).lower() == extract_alphabet(word2).lower()
+
+
 class Class:
     def __init__(self, start: float, end: float, text: str, index: int):
         self.word_list: list[tuple[str, int]] = [(text, index)]  # text, index
@@ -17,7 +27,6 @@ def word_merge(word_list: list[list[tuple[float, float, str]]]) -> str:
     flatten_list: list[tuple[float, float, str, int]] = []  # start, end, text, index
     for i, sublist in enumerate(word_list):
         texts = "".join([text for _, _, text in sublist])
-        print(f"Sublist {i}: {texts}")
         for start, end, text in sublist:
             flatten_list.append((start, end, text, i))
     # 区間の中央値でソートする
@@ -71,8 +80,7 @@ def word_merge(word_list: list[list[tuple[float, float, str]]]) -> str:
     # 同じ単語が連続している場合は1つにまとめる
     final_result = []
     for word in result:
-        if not final_result or final_result[-1] != word:
+        if not final_result or not is_same_word(final_result[-1], word):
             final_result.append(word)
 
-    print("".join(final_result))
     return "".join(final_result)
