@@ -95,7 +95,8 @@ class AudioTranscriber:
                     continue
 
                 try:
-                    audio, start_time, is_last = self.recent_audio_data.audio_data, self.recent_audio_data.start_time, self.recent_audio_data.is_last
+                    recent_audio_data = self.recent_audio_data
+                    audio, start_time, is_last = recent_audio_data.audio_data, recent_audio_data.start_time, recent_audio_data.is_last
                     func = functools.partial(
                         self.whisper_model.transcribe,
                         audio=audio,
@@ -139,6 +140,10 @@ class AudioTranscriber:
                     eel.display_recent_transcription(text)
 
                     if is_last:
+                        if merged == "":
+                            print("No text detected, skipping sending to client.")
+                            continue
+
                         eel.display_transcription(merged)
                         self.transcribe_result_list.append(merged)  # transcribe_result_listに追加
                         self.transcribe_result_list = self.transcribe_result_list[-self.app_options.save_result_number:]
